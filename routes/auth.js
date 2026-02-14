@@ -10,9 +10,7 @@ router.post("/register", async (req, res) => {
 
   try {
     const existing = await User.findOne({ email });
-    if (existing) {
-      return res.status(400).json({ message: "User already exists" });
-    }
+    if (existing) return res.status(400).json({ message: "User already exists" });
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const referralCode = Math.random().toString(36).substring(2, 8);
@@ -26,7 +24,6 @@ router.post("/register", async (req, res) => {
     });
 
     await user.save();
-
     res.json({ message: "Registration successful" });
 
   } catch (err) {
@@ -35,6 +32,33 @@ router.post("/register", async (req, res) => {
   }
 });
 
+// LOGIN
+router.post("/login", async (req, res) => {
+  const { email, password } = req.body;
+
+  try {
+    const user = await User.findOne({ email });
+    if (!user) return res.status(400).json({ message: "User not found" });
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
+
+    res.json({
+      message: "Login successful",
+      user: {
+        username: user.username,
+        email: user.email,
+        balance: user.balance,
+        paid: user.paid,
+        referralCode: user.referralCode
+      }
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
 
 // VERIFY PAYMENT
 router.post("/verify-payment", async (req, res) => {
@@ -44,14 +68,13 @@ router.post("/verify-payment", async (req, res) => {
     const response = await axios.get(
       `https://api.paystack.co/transaction/verify/${reference}`,
       {
-        headers: {
-          Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`
-        }
+        headers: { Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}` }
       }
     );
 
-    if (response.data.data.status === "success") {
+    const data = response.data.data;
 
+    if (data.status === "success" && data.customer.email === email) {
       const user = await User.findOne({ email });
       if (!user) return res.status(404).json({ message: "User not found" });
 
