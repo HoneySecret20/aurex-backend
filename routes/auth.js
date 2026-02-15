@@ -95,5 +95,37 @@ router.post("/verify-payment", async (req, res) => {
     res.status(500).json({ message: "Verification failed" });
   }
 });
+const Withdrawal = require("../models/Withdrawal");
+
+// REQUEST WITHDRAWAL
+router.post("/withdraw", async (req, res) => {
+  const { email, amount } = req.body;
+
+  try {
+    const user = await User.findOne({ email });
+
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    if (user.balance < amount) {
+      return res.status(400).json({ message: "Insufficient balance" });
+    }
+
+    user.balance -= amount;
+    await user.save();
+
+    const withdrawal = new Withdrawal({
+      email,
+      amount
+    });
+
+    await withdrawal.save();
+
+    res.json({ message: "Withdrawal request submitted" });
+
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
 
 module.exports = router;
