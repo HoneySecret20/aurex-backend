@@ -43,16 +43,18 @@ router.post("/login", async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
 
-    res.json({
-      message: "Login successful",
-      user: {
-        username: user.username,
-        email: user.email,
-        balance: user.balance,
-        paid: user.paid,
-        referralCode: user.referralCode
-      }
-    });
+   res.json({
+  message: "Login successful",
+  user: {
+    username: user.username,
+    email: user.email,
+    balance: user.balance,
+    paid: user.paid,
+    referralCode: user.referralCode,
+    referralsCount: user.referralsCount
+  }
+});
+
 
   } catch (err) {
     console.error(err);
@@ -75,12 +77,25 @@ router.post("/verify-payment", async (req, res) => {
     const data = response.data.data;
 
     if (data.status === "success" && data.customer.email === email) {
+
       const user = await User.findOne({ email });
       if (!user) return res.status(404).json({ message: "User not found" });
 
       if (!user.paid) {
         user.paid = true;
-        user.balance += 200; // welcome bonus
+        user.balance += 200; // Welcome bonus
+
+        // 🎯 REFERRAL BONUS SECTION
+        if (user.referredBy) {
+          const referrer = await User.findOne({ referralCode: user.referredBy });
+
+          if (referrer) {
+            referrer.balance += 750; // Referral bonus
+            referrer.referralsCount += 1;
+            await referrer.save();
+          }
+        }
+
         await user.save();
       }
 
@@ -95,15 +110,27 @@ router.post("/verify-payment", async (req, res) => {
     res.status(500).json({ message: "Verification failed" });
   }
 });
-const Withdrawal = require("../models/Withdrawal");
 
 // REQUEST WITHDRAWAL
 router.post("/withdraw", async (req, res) => {
   const { email, amount } = req.body;
 
   try {
-    const user = await User.findOne({ email });
+    const now = new Date();
 
+    const day = now.getDay(); // 0=Sun, 3=Wed, 5=Fri
+    const hour = now.getHours(); // 0–23
+
+    const isCorrectDay = (day === 3 || day === 5);
+    const isCorrectTime = (hour >= 18 && hour < 21); // 6PM–9PM
+
+    if (!isCorrectDay || !isCorrectTime) {
+      return res.status(400).json({
+        message: "Withdrawals allowed only Wed & Fri (6PM – 9PM)"
+      });
+    }
+
+    const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ message: "User not found" });
 
     if (user.balance < amount) {
@@ -126,6 +153,7 @@ router.post("/withdraw", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
+
 
 
 module.exports = router;
