@@ -9,8 +9,14 @@ router.post("/register", async (req, res) => {
   const { username, email, password, referral } = req.body;
 
   try {
-    const existing = await User.findOne({ email });
-    if (existing) return res.status(400).json({ message: "User already exists" });
+   const existingEmail = await User.findOne({ email });
+if (existingEmail)
+  return res.status(400).json({ message: "Email already registered" });
+
+const existingUsername = await User.findOne({ username });
+if (existingUsername)
+  return res.status(400).json({ message: "Username already taken" });
+
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const referralCode = Math.random().toString(36).substring(2, 8);
