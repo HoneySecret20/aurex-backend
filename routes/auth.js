@@ -6,35 +6,51 @@ const User = require("../models/User");
 
 // REGISTER
 router.post("/register", async (req, res) => {
-  const { username, email, password, referral } = req.body;
-
   try {
-   const existingEmail = await User.findOne({ email });
-if (existingEmail)
-  return res.status(400).json({ message: "Email already registered" });
+    const { username, email, password, referredBy } = req.body;
 
-const existingUsername = await User.findOne({ username });
-if (existingUsername)
-  return res.status(400).json({ message: "Username already taken" });
+    // Check duplicate email
+    const existingEmail = await User.findOne({ email });
+    if (existingEmail)
+      return res.status(400).json({ message: "Email already registered" });
 
+    // Check duplicate username
+    const existingUsername = await User.findOne({ username });
+    if (existingUsername)
+      return res.status(400).json({ message: "Username already taken" });
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // Generate referral code
     const referralCode = Math.random().toString(36).substring(2, 8);
 
-    const user = new User({
+    // Create new user with welcome bonus
+    const newUser = new User({
       username,
       email,
-      password: hashedPassword,
+      password,
       referralCode,
-      referredBy: referral || null
+      balance: 200, // 🔥 WELCOME BONUS
+      referralsCount: 0,
+      paid: false
     });
 
-    await user.save();
-    res.json({ message: "Registration successful" });
+    // 🔥 HANDLE REFERRAL BONUS
+    if (referredBy) {
+      const referrer = await User.findOne({ referralCode: referredBy });
+
+      if (referrer) {
+        referrer.balance += 750; // referral bonus
+        referrer.referralsCount += 1;
+        await referrer.save();
+      }
+    }
+
+    await newUser.save();
+
+    res.status(201).json({ message: "Registration successful" });
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
+    console.error("REGISTER ERROR:", err);
+    res.status(500).json({ message: err.message });
   }
 });
 
