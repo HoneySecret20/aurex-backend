@@ -23,11 +23,13 @@ router.post("/register", async (req, res) => {
     const referralCode = Math.random().toString(36).substring(2, 8);
 
     // Create new user with welcome bonus
+    const hashedPassword = await bcrypt.hash(password, 10);
     const newUser = new User({
       username,
       email,
-      password,
+        password: hashedPassword,
       referralCode,
+      referredBy,
       balance: 200, // 🔥 WELCOME BONUS
       referralsCount: 0,
       paid: false
@@ -105,7 +107,7 @@ router.post("/verify-payment", async (req, res) => {
 
       if (!user.paid) {
         user.paid = true;
-        user.balance += 200; // Welcome bonus
+      
 
         // 🎯 REFERRAL BONUS SECTION
         if (user.referredBy) {
