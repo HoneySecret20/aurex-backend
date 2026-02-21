@@ -13,6 +13,7 @@ const userSchema = new mongoose.Schema({
   referredBy: { type: String, default: null },
   paid: { type: Boolean, default: false },
   balance: { type: Number, default: 0 },
+  tasksCompleted: { type: [String], default: [] },
   referralsCount: { type: Number, default: 0 } // optional: track referrals
 }, { timestamps: true });
 
