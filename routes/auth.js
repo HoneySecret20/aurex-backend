@@ -35,17 +35,6 @@ router.post("/register", async (req, res) => {
       paid: false
     });
 
-    // 🔥 HANDLE REFERRAL BONUS
-    if (referredBy) {
-      const referrer = await User.findOne({ referralCode: referredBy });
-
-      if (referrer) {
-        referrer.balance += 750; // referral bonus
-        referrer.referralsCount += 1;
-        await referrer.save();
-      }
-    }
-
     await newUser.save();
 
     res.status(201).json({ message: "Registration successful" });
@@ -135,6 +124,43 @@ router.post("/verify-payment", async (req, res) => {
   }
 });
 
+// COMPLETE TASK
+router.post("/complete-task", async (req, res) => {
+  const { email, reward } = req.body;
+
+  try {
+    const user = await User.findOne({ email });
+    if (!user)
+      return res.status(404).json({ message: "User not found" });
+
+    // Get today's date string
+    const today = new Date().toISOString().split("T")[0];
+
+    // Check if task already done today
+    if (user.tasksCompleted.includes(today)) {
+      return res.status(400).json({
+        message: "Task already completed today"
+      });
+    }
+
+    // Add reward
+    user.balance += reward;
+
+    // Save today's task
+    user.tasksCompleted.push(today);
+
+    await user.save();
+
+    res.json({
+      message: "Task completed",
+      balance: user.balance
+    });
+
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
 // REQUEST WITHDRAWAL
 router.post("/withdraw", async (req, res) => {
   const { email, amount } = req.body;
@@ -178,6 +204,58 @@ router.post("/withdraw", async (req, res) => {
   }
 });
 
+const crypto = require("crypto");
 
+router.post("/paystack-webhook", async (req, res) => {
+
+  const hash = crypto
+    .createHmac("sha512", process.env.PAYSTACK_SECRET_KEY)
+    .update(req.rawBody)
+    .digest("hex");
+
+  if (hash !== req.headers["x-paystack-signature"]) {
+    return res.status(400).send("Invalid signature");
+  }
+
+  const event = req.body;
+
+  // We only care about successful payments
+  if (event.event === "charge.success") {
+
+    const email = event.data.customer.email;
+
+    try {
+      const user = await User.findOne({ email });
+
+      if (!user) return res.sendStatus(200);
+
+      if (!user.paid) {
+
+        user.paid = true;
+
+        // 🎯 Referral bonus
+        if (user.referredBy) {
+          const referrer = await User.findOne({
+            referralCode: user.referredBy
+          });
+
+          if (referrer) {
+            referrer.balance += 750;
+            referrer.referralsCount += 1;
+            await referrer.save();
+          }
+        }
+
+        await user.save();
+      }
+
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  res.sendStatus(200);
+});
 
 module.exports = router;
+
